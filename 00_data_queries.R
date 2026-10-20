@@ -145,8 +145,15 @@ gap_biomass <- tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_BIOMASS_V")) %>%
 # write csvs
 write.csv(gap_biomass%>%filter(survey_definition_id==98),  "data/BSAI/ebs_biomass.csv",  row.names=FALSE)
 write.csv(gap_biomass%>%filter(survey_definition_id==143),  "data/BSAI/nbs_biomass.csv",  row.names=FALSE)
-write.csv(gap_biomass%>%filter(survey_definition_id==51),  "data/BSAI/ai_biomass.csv",  row.names=FALSE)
+write.csv(gap_biomass%>%filter(survey_definition_id==52),  "data/BSAI/ai_biomass.csv",  row.names=FALSE)
 write.csv(gap_biomass%>%filter(survey_definition_id==47),  "data/GOA/goa_biomass.csv",  row.names=FALSE)
+
+
+ebs_biomass_strata <- tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_BIOMASS_V")) %>%
+  rename_with(tolower) %>%
+  filter(species_code %in% gap_sp & survey_definition_id == 98  & area_type == "STRATUM") %>%
+  collect()
+write.csv(ebs_biomass_strata,  "data/BSAI/ebs_biomass_strata.csv",  row.names=FALSE)
 
 # goa cpue
 goa_cpue <-  tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_CPUE_V")) %>%
@@ -160,7 +167,7 @@ write.csv(goa_cpue,  "data/GOA/goa_cpue.csv",  row.names=FALSE)
 # Note that I combined AI, EBS slope, SEBS and NBS into one csv
 bsai_cpue <-  tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_CPUE_V")) %>%
   rename_with(tolower) %>%
-  filter(species_code %in% gap_sp & survey_definition_id%in%c(51, 78, 98, 143)) %>%
+  filter(species_code %in% gap_sp & survey_definition_id%in%c(52, 78, 98, 143)) %>%
   collect()
 
 # save
