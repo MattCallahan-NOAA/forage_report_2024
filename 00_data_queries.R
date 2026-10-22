@@ -14,7 +14,8 @@ options(java.parameters="-Xmx8g")
 jdbcDriver <- JDBC(driverClass="oracle.jdbc.OracleDriver", classPath="../snippets/dbconnect/java/ojdbc8.jar")
 
 con <- dbConnect(jdbcDriver, 
-                   "jdbc:oracle:thin:@//tiger:2045/akfin.psmfc.org", 
+                 "jdbc:oracle:thin:@akfin",
+                   #"jdbc:oracle:thin:@//tiger:2045/akfin.psmfc.org", 
                    keyring::key_list("akfin_oracle_db")$username, 
                    keyring::key_get("akfin_oracle_db", keyring::key_list("akfin_oracle_db")$username))
 
@@ -125,14 +126,13 @@ write.csv(sqid%>%filter(fmp_area=="BSAI"), "data/BSAI/squid_catch.csv", row.name
 goa_biom<-read.csv("2024/data/GOA/Biomass by Stratum GOA.csv")
 goa_cpue<-read.csv("2024/data/GOA/race_cpue_by_haul.csv")
 goa_sp<-unique(c(unique(goa_biom$Species.Code), unique(goa_cpue$Species.Code)))
-# 20202 20510 21110 21592 21740 23000 23010 23041 23220 23235 23240 23800 66000 66031 66120 79000 79210
+goa_sp<- c(20202, 20510, 21110, 21592, 21740, 23000, 23010, 23041, 23220, 23235, 23240, 23800, 66000, 66031, 66120, 79000, 79210)
 bsai1 <- read.csv("2024/data/BSAI/race_cpue_by_haul.csv", skip=7)
 bsai2 <- read.csv("2024/data/BSAI/EBS Shelf - Biomass by Stratum Standard.csv")
 bsai3 <- read.csv("2024/data/BSAI/ebs_biomass.csv")
 79000 #EBS Shelf - Biomass by Stratum Standard Grouped
 bsai_sp<-unique(c(unique(bsai1$Species.Code), unique(bsai2$Species.Code), unique(bsai3$Species.Code)))
-bsai_sp
-#79210 23000 66045 21592 23808 66030 60145 23010 66302 23055 66179 23041 23850 23807 20202 66770 66031 66000 21110 79000 66601 23809 21725 66150 23806 23800 23836 66163 66161 20203 20204 66019 66500 66548 66050 66120 64000 22600 66003 79120 66512 66032 22623 66750
+bsai_sp<-c(79210,23000, 66045, 21592, 23808, 66030, 60145, 23010, 66302, 23055, 66179, 23041, 23850 ,23807, 20202, 66770, 66031, 66000, 21110, 79000, 66601, 23809 ,21725, 66150, 23806, 23800, 23836, 66163 ,66161, 20203, 20204, 66019 ,66500, 66548, 66050, 66120, 64000, 22600, 66003 ,79120 ,66512 ,66032, 22623, 66750)
 gap_sp <- unique(c(goa_sp, bsai_sp))
 # select only biomass regions
 gap_regions<-c(99900, 99902, 99903, 99904, 99905)
@@ -148,6 +148,12 @@ write.csv(gap_biomass%>%filter(survey_definition_id==143),  "data/BSAI/nbs_bioma
 write.csv(gap_biomass%>%filter(survey_definition_id==52),  "data/BSAI/ai_biomass.csv",  row.names=FALSE)
 write.csv(gap_biomass%>%filter(survey_definition_id==47),  "data/GOA/goa_biomass.csv",  row.names=FALSE)
 
+goa_biomass_strata <- tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_BIOMASS_V")) %>%
+  rename_with(tolower) %>%
+  filter(species_code %in% gap_sp & survey_definition_id == 47  & area_type %in% c("NMFS STATISTICAL AREA","INPFC")) %>%
+  collect()
+
+write.csv(goa_biomass_strata,  "data/GOA/goa_biomass_strata.csv",  row.names=FALSE)
 
 ebs_biomass_strata <- tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_BIOMASS_V")) %>%
   rename_with(tolower) %>%
