@@ -14,8 +14,8 @@ options(java.parameters="-Xmx8g")
 jdbcDriver <- JDBC(driverClass="oracle.jdbc.OracleDriver", classPath="../snippets/dbconnect/java/ojdbc8.jar")
 
 con <- dbConnect(jdbcDriver, 
-                 "jdbc:oracle:thin:@akfin",
-                   #"jdbc:oracle:thin:@//tiger:2045/akfin.psmfc.org", 
+                 #"jdbc:oracle:thin:@akfin",
+                  "jdbc:oracle:thin:@//tiger:2045/akfin.psmfc.org", 
                    keyring::key_list("akfin_oracle_db")$username, 
                    keyring::key_get("akfin_oracle_db", keyring::key_list("akfin_oracle_db")$username))
 
@@ -58,9 +58,23 @@ nontarget <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_NONTARGET")) %>%
     collect()%>%
   mutate(retained_or_discarded=ifelse(retained_or_discarded=="Y", "Retained", "Discarded"))
 
+
+# squid target fishery
+squid_nontarget <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_NONTARGET")) %>%
+  rename_with(tolower) %>%
+  filter(nontarget_group_name =="Squid") %>%
+  mutate(region=case_when(fmp_subarea %in% c( "WY", "SE") ~ "SEGOA", .default=fmp_subarea))%>%
+  group_by(region, year, trip_target_name, nontarget_group_name, retained_or_discarded) %>%
+  summarise(
+    nontarget_estimate_mt = sum(nontarget_estimate_weight, na.rm = TRUE),
+    conf_flag = ifelse(n_distinct(vessel_id)<3, 1,0)) %>%
+  arrange(region, year, trip_target_name,nontarget_group_name, retained_or_discarded) %>% 
+  collect()%>%
+  mutate(retained_or_discarded=ifelse(retained_or_discarded=="Y", "Retained", "Discarded"))
 # sanity check 
 # sum((bsai_nt%>%filter(Year<2021))$Nontarget.Estimate..mt.)-sum((nontarget %>% filter(year<2021 & fmp_area=="BSAI"))$nontarget_estimate_mt) # 0
 # sum((goa_nt%>%filter(Year<2021))$Nontarget.Estimate..mt.)-sum((nontarget %>% filter(year<2021 & fmp_area=="GOA"))$nontarget_estimate_mt) # 0
+
 
 # write separate csvs
 write.csv(nontarget%>%filter(fmp_area=="GOA"), "data/GOA/goa_nontarget.csv", row.names=FALSE)
@@ -72,10 +86,12 @@ write.csv(nontarget%>%filter(fmp_area=="BSAI"), "data/BSAI/bsai_nontarget.csv", 
 psc <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_PSC")) %>%
   rename_with(tolower) %>%
   filter(species_group_code =="HERR") %>%
-  group_by(fmp_area, year, trip_target_name) %>%
+  mutate(region=case_when(fmp_subarea %in% c( "WY", "SE") ~ "SEGOA", .default=fmp_subarea))%>%
+  group_by(region, year, trip_target_name) %>%
   summarise(
-    psc_estimate_mt = sum(pscnq_estimate, na.rm = TRUE)  ) %>%
-  arrange(fmp_area, year, trip_target_name) %>% 
+    psc_estimate_mt = sum(pscnq_estimate, na.rm = TRUE),
+    conf_flag = ifelse(n_distinct(vessel_id)<3, 1,0)) %>%
+  arrange(region, year, trip_target_name) %>% 
   collect()
 
 # check
@@ -83,19 +99,27 @@ psc <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_PSC")) %>%
 # sum((goa_psc_24%>%filter(Year<2023))$PSCNQ.Estimate)-sum((psc %>% filter(year<2023 & fmp_area=="GOA"))$psc_estimate_mt) # 0
 
 # write separate csvs
-write.csv(psc%>%filter(fmp_area=="GOA"), "data/GOA/goa_herring_psc.csv", row.names=FALSE)
-write.csv(psc%>%filter(fmp_area=="BSAI"), "data/BSAI/bsai_herring_psc.csv", row.names=FALSE)
+# write.csv(psc%>%filter(fmp_area=="GOA"), "data/GOA/goa_herring_psc.csv", row.names=FALSE)
+# write.csv(psc%>%filter(fmp_area=="BSAI"), "data/BSAI/bsai_herring_psc.csv", row.names=FALSE)
+write.csv(psc, "data/BSAI/herring_psc_region.csv", row.names=FALSE)
 
 # CAS
 # This is just squid
 sqid <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_BLEND_CA")) %>%
   rename_with(tolower) %>%
   filter(species_group_code =="SQID" | species_name == "squid, majestic") %>%
-  group_by(fmp_area, year, species_group_code, retained_or_discarded) %>%
+  mutate(region=case_when(fmp_subarea %in% c( "WY", "SE") ~ "SEGOA", .default=fmp_subarea))%>%
+  group_by(region, year, trip_target_name, species_group_code, retained_or_discarded) %>%
   summarise(
-    catch_mt = sum(weight_posted, na.rm = TRUE)  ) %>%
-  arrange(fmp_area, year, species_group_code, retained_or_discarded) %>% 
+    catch_mt = sum(weight_posted, na.rm = TRUE),
+    conf_flag = ifelse(n_distinct(vessel_id)<3, 1,0)) %>%
+  arrange(region, year, trip_target_name,species_group_code, retained_or_discarded) %>% 
   collect()
+
+squid_nontarget_combined <- sqid %>%
+  bind_rows(squid_nontarget)
+
+write.csv(squid_nontarget_combined, "data/GOA/squid_nontarget.csv", row.names=FALSE)
 
 # check
 # cas24_1<-read.csv("2024/data/GOA/FMP Other Species Bycatch CAS2.csv")
@@ -133,7 +157,8 @@ bsai3 <- read.csv("2024/data/BSAI/ebs_biomass.csv")
 79000 #EBS Shelf - Biomass by Stratum Standard Grouped
 bsai_sp<-unique(c(unique(bsai1$Species.Code), unique(bsai2$Species.Code), unique(bsai3$Species.Code)))
 bsai_sp<-c(79210,23000, 66045, 21592, 23808, 66030, 60145, 23010, 66302, 23055, 66179, 23041, 23850 ,23807, 20202, 66770, 66031, 66000, 21110, 79000, 66601, 23809 ,21725, 66150, 23806, 23800, 23836, 66163 ,66161, 20203, 20204, 66019 ,66500, 66548, 66050, 66120, 64000, 22600, 66003 ,79120 ,66512 ,66032, 22623, 66750)
-gap_sp <- unique(c(goa_sp, bsai_sp))
+gap_sp <- unique(c(goa_sp, bsai_sp, 66020))
+
 # select only biomass regions
 gap_regions<-c(99900, 99902, 99903, 99904, 99905)
 
@@ -180,4 +205,17 @@ bsai_cpue <-  tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_CPUE_V")) %>%
 # half a million rows
 write.csv(bsai_cpue,  "data/BSAI/bsai_cpue.csv",  row.names=FALSE)
 
+
+# I forgot sidestripe shrimp apparently
+pandalus_bio<-tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_BIOMASS_V")) %>%
+  rename_with(tolower) %>%
+  filter(species_code==66020 & area_id %in% gap_regions )%>%
+  collect()
+
+pandalus_cpue <-  tbl(con, in_schema("GAP_PRODUCTS", "AKFIN_CPUE_V")) %>%
+  rename_with(tolower) %>%
+  filter(species_code == 66020) %>%
+  collect()
+write.csv(pandalus_bio, "data/pandalus_biomass.csv",  row.names=FALSE)
+write.csv(pandalus_cpue, "data/pandalus_cpue.csv",  row.names=FALSE)
 
