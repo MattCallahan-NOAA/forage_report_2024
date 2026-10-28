@@ -58,6 +58,19 @@ nontarget <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_NONTARGET")) %>%
     collect()%>%
   mutate(retained_or_discarded=ifelse(retained_or_discarded=="Y", "Retained", "Discarded"))
 
+# shrimp target fishery and region
+shrimp_nontarget<- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_NONTARGET")) %>%
+  rename_with(tolower) %>%
+  filter(nontarget_group_name =="Pandalid shrimp" ) %>%
+  mutate(region=case_when(fmp_subarea %in% c( "WY", "SE") ~ "SEGOA", .default=fmp_subarea))%>%
+  group_by(region, year, trip_target_name, nontarget_group_name, retained_or_discarded) %>%
+  summarise(
+    nontarget_estimate_mt = sum(nontarget_estimate_weight, na.rm = TRUE),
+    conf_flag = ifelse(n_distinct(vessel_id)<3, 1,0)) %>%
+  arrange(region, year, trip_target_name,nontarget_group_name, retained_or_discarded) %>% 
+  collect()%>%
+  mutate(retained_or_discarded=ifelse(retained_or_discarded=="Y", "Retained", "Discarded"))
+
 
 # squid target fishery
 squid_nontarget <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_NONTARGET")) %>%
@@ -79,6 +92,7 @@ squid_nontarget <- tbl(con, in_schema("COUNCIL", "COMPREHENSIVE_NONTARGET")) %>%
 # write separate csvs
 write.csv(nontarget%>%filter(fmp_area=="GOA"), "data/GOA/goa_nontarget.csv", row.names=FALSE)
 write.csv(nontarget%>%filter(fmp_area=="BSAI"), "data/BSAI/bsai_nontarget.csv", row.names=FALSE)
+write.csv(shrimp_nontarget, "data/shrimp_nontarget.csv", row.names=FALSE)
 
 # PSC
 
